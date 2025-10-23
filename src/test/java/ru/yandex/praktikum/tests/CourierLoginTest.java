@@ -8,38 +8,83 @@ import org.junit.Test;
 import ru.yandex.praktikum.client.CourierClient;
 import ru.yandex.praktikum.model.Courier;
 
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.apache.http.HttpStatus.*;
+import static org.hamcrest.Matchers.*;
 
 public class CourierLoginTest extends BaseTest {
 
     private CourierClient courierClient;
-    private Courier courier;
-    private int courierId;
+    private Courier validCourier;
+    private Integer createdCourierId;
 
     @Before
-    @Step("Создание курьера перед тестом логина")
     public void setUp() {
-        courierClient = new CourierClient();
-        courier = new Courier("login_user_" + System.currentTimeMillis(), "1234", "Log Name");
-        courierClient.createCourier(courier);
+        courierClient = new CourierClient(SPEC);
 
-        Response loginResponse = courierClient.loginCourier(courier);
-        courierId = loginResponse.then().extract().path("id");
-    }
+        String login = "testLogin_" + System.currentTimeMillis();
+        validCourier = new Courier(login, "testPassword", "TestName");
 
-    @Test
-    @Step("Проверка успешного логина курьера")
-    public void testCourierLoginSuccess() {
-        Response response = courierClient.loginCourier(courier);
-        response.then().statusCode(200).body("id", notNullValue());
+        createCourier(validCourier).then().statusCode(SC_CREATED).body("ok", equalTo(true));
+
+        Response loginResp = loginCourier(validCourier).then().statusCode(SC_OK).body("id", notNullValue()).extract().response();
+        createdCourierId = loginResp.path("id");
     }
 
     @After
-    @Step("Удаление курьера после теста логина")
     public void tearDown() {
-        if (courierId != 0) {
-            courierClient.deleteCourier(courierId);
+        if (createdCourierId != null) {
+            deleteCourierSafely(createdCourierId);
         }
+    }
+
+    @Test
+    public void testCourierLoginSuccess() {
+        loginCourier(validCourier)
+                .then()
+                .statusCode(SC_OK)
+                .body("id", notNullValue());
+    }
+
+    @Test
+    public void testCourierLoginWithoutLogin() {
+        Courier noLogin = new Courier("", validCourier.getPassword(), validCourier.getFirstName());
+
+        loginCourier(noLogin)
+                .then()
+                .statusCode(SC_BAD_REQUEST)
+                .body("message", equalTo("Недостаточно данных для входа"));
+    }
+
+    @Test
+    public void testCourierLoginWithoutPassword() {
+        Courier noPassword = new Courier(validCourier.getLogin(), "", validCourier.getFirstName());
+
+        loginCourier(noPassword)
+                .then()
+                .statusCode(SC_BAD_REQUEST)
+                .body("message", equalTo("Недостаточно данных для входа"));
+    }
+
+    @Test
+    public void testCourierLoginWithWrongCredentials() {
+        Courier wrong = new Courier("wrongLogin", "wrongPass", "name");
+
+        loginCourier(wrong)
+                .then()
+                .statusCode(SC_NOT_FOUND)
+                .body("message", anyOf(
+                        equalTo("Учетная запись не найдена"),
+                        equalTo("Учетная запись не найдена.") // на случай другой пунктуации
+                ));
+    }
+
+    @Step("Создание курьера: {courier}")
+    private Response createCourier(Courier courier) {
+        return courierClient.createCourier(courier);
+    }
+
+    @Step("Логин курьера: {courier.login}")
+    private Response loginCourier(Courier courier) {
+        return courierClient.loginCourier(courier);
     }
 }

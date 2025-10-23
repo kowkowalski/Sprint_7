@@ -1,6 +1,6 @@
 package ru.yandex.praktikum.tests;
 
-import io.qameta.allure.Description;
+import static org.hamcrest.Matchers.containsString;
 import io.qameta.allure.Step;
 import io.restassured.response.Response;
 import org.junit.After;
@@ -9,41 +9,48 @@ import org.junit.Test;
 import ru.yandex.praktikum.client.CourierClient;
 import ru.yandex.praktikum.model.Courier;
 
+import static org.apache.http.HttpStatus.*;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.notNullValue;
 
 public class CourierDuplicateCreateTest extends BaseTest {
 
     private CourierClient courierClient;
     private Courier courier;
-    private int courierId = -1;
+    private Integer createdCourierId;
 
     @Before
     public void setUp() {
-        courierClient = new CourierClient();
+        courierClient = new CourierClient(SPEC);
         courier = new Courier("user" + System.currentTimeMillis(), "1234", "Ivan");
-        courierClient.createCourier(courier);
-        Response loginResponse = courierClient.loginCourier(courier);
-        courierId = loginResponse.then().extract().path("id");
-    }
 
-    @Step("Создать дубликата курьера")
-    private Response createDuplicateCourier(Courier courier) {
-        return courierClient.createCourier(courier);
-    }
-
-    @Test
-    @Description("Проверка: нельзя создать двух одинаковых курьеров")
-    public void testCreateDuplicateCourier() {
-        Response response = createDuplicateCourier(courier);
-        response.then()
-                .statusCode(409)
-                .body("message", equalTo("Этот логин уже используется. Попробуйте другой."));
+        createCourier(courier).then().statusCode(SC_CREATED).body("ok", equalTo(true));
+        Response login = loginCourier(courier).then().statusCode(SC_OK).body("id", notNullValue()).extract().response();
+        createdCourierId = login.path("id");
     }
 
     @After
     public void tearDown() {
-        if (courierId > 0) {
-            courierClient.deleteCourier(courierId).then().statusCode(200);
+        if (createdCourierId != null) {
+            deleteCourierSafely(createdCourierId);
         }
+    }
+
+    @Test
+    public void testCreateDuplicateCourier() {
+        createCourier(courier)
+                .then()
+                .statusCode(SC_CONFLICT)
+                .body("message", containsString("Этот логин уже используется"));
+    }
+
+    @Step("Создание курьера: {courier}")
+    private Response createCourier(Courier courier) {
+        return courierClient.createCourier(courier);
+    }
+
+    @Step("Логин курьера: {courier.login}")
+    private Response loginCourier(Courier courier) {
+        return courierClient.loginCourier(courier);
     }
 }

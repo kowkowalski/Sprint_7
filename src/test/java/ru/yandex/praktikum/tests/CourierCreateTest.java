@@ -8,6 +8,8 @@ import org.junit.Test;
 import ru.yandex.praktikum.client.CourierClient;
 import ru.yandex.praktikum.model.Courier;
 
+import static org.apache.http.HttpStatus.SC_CREATED;
+import static org.apache.http.HttpStatus.SC_OK;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
@@ -15,31 +17,39 @@ public class CourierCreateTest extends BaseTest {
 
     private CourierClient courierClient;
     private Courier courier;
-    private int courierId;
+    private Integer createdCourierId;
 
     @Before
-    @Step("Подготовка данных для создания курьера")
     public void setUp() {
-        courierClient = new CourierClient();
-        courier = new Courier("test_user_" + System.currentTimeMillis(), "1234", "Test Name");
-    }
-
-    @Test
-    @Step("Создание нового курьера и проверка успешного ответа")
-    public void testCreateCourierSuccess() {
-        Response response = courierClient.createCourier(courier);
-        response.then().statusCode(201).body("ok", equalTo(true));
-
-        Response loginResponse = courierClient.loginCourier(courier);
-        courierId = loginResponse.then().extract().path("id");
-        loginResponse.then().statusCode(200).body("id", notNullValue());
+        courierClient = new CourierClient(SPEC);
+        courier = new Courier("courierLogin", "courierPassword", "courierName");
     }
 
     @After
-    @Step("Удаление созданного курьера после теста")
     public void tearDown() {
-        if (courierId != 0) {
-            courierClient.deleteCourier(courierId);
+        if (createdCourierId != null) {
+            deleteCourierSafely(createdCourierId);
         }
+    }
+
+    @Test
+    public void testCreateCourierSuccess() {
+        Response createResp = createCourier(courier);
+        createResp.then().statusCode(SC_CREATED).body("ok", equalTo(true));
+
+        Response loginResp = loginCourier(courier);
+        loginResp.then().statusCode(SC_OK).body("id", notNullValue());
+
+        createdCourierId = loginResp.then().extract().path("id");
+    }
+
+    @Step("Создание курьера: {courier}")
+    private Response createCourier(Courier courier) {
+        return courierClient.createCourier(courier);
+    }
+
+    @Step("Логин курьера: {courier.login}")
+    private Response loginCourier(Courier courier) {
+        return courierClient.loginCourier(courier);
     }
 }

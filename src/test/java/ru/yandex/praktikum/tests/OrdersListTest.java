@@ -1,25 +1,28 @@
 package ru.yandex.praktikum.tests;
 
-import io.qameta.allure.Description;
 import io.qameta.allure.Step;
 import io.restassured.response.Response;
 import org.junit.Test;
 import ru.yandex.praktikum.client.OrderClient;
 
-import static org.hamcrest.Matchers.notNullValue;
+import static org.apache.http.HttpStatus.SC_OK;
+import static org.hamcrest.Matchers.*;
 
 public class OrdersListTest extends BaseTest {
 
-    @Step("Получить список заказов")
-    private Response getOrders() {
-        OrderClient orderClient = new OrderClient();
-        return orderClient.getOrders();
-    }
+    private final OrderClient orderClient = new OrderClient(SPEC);
 
     @Test
-    @Description("Проверка: список заказов возвращается успешно")
     public void testGetOrdersList() {
-        Response response = getOrders();
-        response.then().statusCode(200).body("orders", notNullValue());
+        getOrdersList()
+                .then()
+                .statusCode(SC_OK)
+                .body("orders", notNullValue())
+                .body("orders.size()", greaterThan(0));
+    }
+
+    @Step("Получение списка заказов")
+    private Response getOrdersList() {
+        return orderClient.getOrdersList();
     }
 }
